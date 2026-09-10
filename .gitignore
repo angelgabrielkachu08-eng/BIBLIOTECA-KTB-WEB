@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
+
+# Variables de entorno — nunca subir al repo
+.env
+.env.local
+.env.production

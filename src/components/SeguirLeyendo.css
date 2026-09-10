@@ -1,0 +1,146 @@
+.sl-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 14px 0 0;
+  padding: 16px 52px;
+  background: linear-gradient(118deg, #681b2a, #42101b 64%, #7b2939);
+  color: #fff9f0;
+  overflow: hidden;
+  min-height: 110px;
+}
+
+/* watermark decorativo */
+.sl-wrap::before {
+  content: 'KTB';
+  position: absolute;
+  right: -12px;
+  bottom: -42px;
+  font: 700 110px 'Playfair Display';
+  color: #ffffff08;
+  pointer-events: none;
+}
+
+/* barra de progreso */
+.sl-progress {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 3px;
+  background: #ffffff20;
+}
+.sl-progress span {
+  display: block;
+  height: 100%;
+  background: #e2bd65;
+  transition: width .5s ease;
+}
+
+/* portada pequeña */
+.sl-cover {
+  flex: 0 0 62px;
+  width: 62px;
+  height: 88px;
+  border: 1px solid #e1bd69;
+  background: #3a0b15;
+  display: grid;
+  place-items: center;
+  color: #ebcf89;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  box-shadow: 5px 6px 0 #0002;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.sl-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sl-cover svg { width: 20px; }
+
+/* texto */
+.sl-copy {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.sl-eyebrow {
+  margin: 0 0 4px;
+  color: #f0ce78;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.7px;
+}
+
+.sl-title {
+  margin: 0 0 3px;
+  font: 600 18px/1.1 'Playfair Display';
+  color: #fff9f2;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+.sl-title:hover { color: #e2bd65; }
+
+.sl-meta {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #edc970;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.sl-author {
+  margin: 0;
+  font-size: 11px;
+  color: #f4dfb2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* flechas */
+.sl-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 26px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e2bd6980;
+  background: #27071070;
+  color: #f4d681;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.sl-arrow:hover { background: #e2bd69; color: #4b1320; }
+.sl-arrow svg { width: 16px; }
+.sl-prev { left: 14px; }
+.sl-next { right: 14px; }
+
+/* dark mode */
+[data-theme="dark"] .sl-wrap {
+  background: linear-gradient(118deg, #681b2a, #42101b 64%, #7b2939);
+}
+
+/* responsive */
+@media (max-width: 760px) {
+  .sl-wrap { padding: 14px 40px; min-height: 0; gap: 12px; }
+  .sl-cover { flex: 0 0 48px; width: 48px; height: 68px; }
+  .sl-title { font-size: 15px; }
+  .sl-prev { left: 7px; }
+  .sl-next { right: 7px; }
+}

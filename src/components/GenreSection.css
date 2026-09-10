@@ -1,0 +1,192 @@
+/* ── Sección ─────────────────────────────────────────────── */
+.gs-section { margin-top: 44px; }
+
+.gs-head { margin-bottom: 16px; }
+
+.gs-eyebrow {
+  margin: 0 0 4px;
+  color: #97793f;
+  font-size: 10px;
+  letter-spacing: 1.65px;
+  font-weight: 700;
+}
+
+.gs-title {
+  margin: 0;
+  color: #d4b36d;
+  font: 600 22px 'Playfair Display';
+}
+
+/* ── Viewport + fades ────────────────────────────────────── */
+.gs-viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+.gs-fade-left,
+.gs-fade-right {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 48px;
+  z-index: 2;
+  pointer-events: none;
+}
+.gs-fade-left  { left: 0;  background: linear-gradient(to right, #f4f1ea, transparent); }
+.gs-fade-right { right: 0; background: linear-gradient(to left,  #f4f1ea, transparent); }
+
+/* ── Track animado ───────────────────────────────────────── */
+.gs-track {
+  display: flex;
+  gap: 14px;
+  width: max-content;
+  animation: gs-scroll 32s linear infinite;
+  will-change: transform;
+  padding: 6px 2px 10px;
+}
+.gs-track:hover { animation-play-state: paused; }
+
+@keyframes gs-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-33.333%); }
+}
+
+/* ── Tarjeta ─────────────────────────────────────────────── */
+.gs-card {
+  flex: 0 0 160px;
+  background: #fbfaf6;
+  border: 1px solid #ddd7cb;
+  padding: 9px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.gs-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 22px #3a0b1514;
+  border-color: #b79b5f;
+}
+
+/* ── Portada ─────────────────────────────────────────────── */
+.gs-cover {
+  width: 100%;
+  height: 180px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #6b1f30, #3d0e18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f1dfb2;
+  margin-bottom: 9px;
+  flex-shrink: 0;
+}
+.gs-cover img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+.gs-cover svg { width: 26px; }
+.gs-cover b {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #2a0810e8;
+  padding: 3px 4px;
+  color: #e2bd65;
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  text-align: center;
+}
+
+/* ── Info ────────────────────────────────────────────────── */
+.gs-info { display: flex; flex-direction: column; gap: 2px; }
+.gs-cat { color: #937740; font-size: 9px; letter-spacing: .8px; text-transform: uppercase; }
+.gs-titulo {
+  margin: 2px 0 0;
+  font: 600 13px/1.2 'Playfair Display';
+  color: #3d0e18;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: 32px;
+}
+.gs-author { margin: 0; font-size: 10px; color: #7a5a60; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Géneros ─────────────────────────────────────────────── */
+.gs-genres {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e5ddd0;
+}
+
+.gs-genres-label {
+  margin: 0 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #97793f;
+  text-transform: uppercase;
+}
+
+.gs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gs-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: #fbfaf6;
+  border: 1px solid #d4c9b4;
+  color: #4a1a24;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, transform .15s;
+  letter-spacing: .2px;
+}
+.gs-chip:hover {
+  background: #6b1f30;
+  border-color: #6b1f30;
+  color: #f4e5ba;
+  transform: translateY(-2px);
+}
+.gs-chip.active {
+  background: #3a0b15;
+  border-color: #d4b36d;
+  color: #e2bd65;
+}
+
+.gs-chip-icon {
+  font-size: 14px;
+  line-height: 1;
+  color: #d4b36d;
+}
+.gs-chip:hover .gs-chip-icon,
+.gs-chip.active .gs-chip-icon {
+  color: #e2bd65;
+}
+
+/* ── Dark mode ───────────────────────────────────────────── */
+[data-theme="dark"] .gs-card         { background: #2a0810; border-color: #7e2638; }
+[data-theme="dark"] .gs-titulo       { color: #f3ead9; }
+[data-theme="dark"] .gs-chip         { background: #2a0810; border-color: #7e2638; color: #d4a8b0; }
+[data-theme="dark"] .gs-chip:hover   { background: #6b1f30; color: #f4e5ba; }
+[data-theme="dark"] .gs-fade-left    { background: linear-gradient(to right, #2a0810, transparent); }
+[data-theme="dark"] .gs-fade-right   { background: linear-gradient(to left,  #2a0810, transparent); }
+[data-theme="dark"] .gs-genres       { border-color: #5a1724; }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .gs-card  { flex: 0 0 135px; }
+  .gs-cover { height: 150px; }
+  .gs-chip  { padding: 6px 11px; font-size: 11px; }
+  .gs-track { animation-duration: 22s; }
+  .gs-card:hover { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-track { animation: none; }
+}
