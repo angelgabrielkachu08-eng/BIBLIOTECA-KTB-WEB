@@ -4,6 +4,10 @@
   display: inline-flex;
   flex-direction: column;
   min-width: 0;
+  z-index: 10;
+}
+.csel-open {
+  z-index: 1001;
 }
 
 /* ── Trigger (el botón visible) ──────────────────────────── */
@@ -44,7 +48,7 @@
   top: calc(100% + 2px);
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 1000;
   background: #fffdf8;
   border: 1px solid #d4c3a0;
   box-shadow: 0 8px 24px #3a0b1520;
@@ -53,7 +57,6 @@
   padding: 4px 0;
   max-height: 260px;
   overflow-y: auto;
-  /* Sin scrollbar visible en webkit */
   scrollbar-width: thin;
   scrollbar-color: #d4b36d transparent;
 }
