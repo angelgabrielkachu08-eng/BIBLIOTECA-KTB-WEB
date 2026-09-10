@@ -127,17 +127,28 @@ export default function PerfilLector() {
   const load = async (current) => {
     setSession(current);
     if (!current?.user?.email) { setProfile(null); setItems([]); return; }
-    const [{ data: user }, { data: allBooks }] = await Promise.all([
+    const [{ data: userData }, { data: allBooks }] = await Promise.all([
       supabase.from('usuarios').select('*').eq('email', current.user.email).maybeSingle(),
       supabase.from('libros').select('*'),
     ]);
-    setProfile(user || null);
+    let user = userData || null;
     setBooks(allBooks || []);
     if (user) {
+      // Buscar avatar en storage si no está en la tabla
+      if (!user.avatar_url) {
+        for (const ext of ['jpg', 'jpeg', 'png', 'webp']) {
+          const { data: urlData } = supabase.storage.from('biblioteca-archivos').getPublicUrl(`avatars/${user.id_usuario}.${ext}`);
+          try {
+            const res = await fetch(urlData.publicUrl, { method: 'HEAD' });
+            if (res.ok) { user = { ...user, avatar_url: urlData.publicUrl + '?v=' + Date.now() }; break; }
+          } catch { /* no existe */ }
+        }
+      }
       const { data } = await supabase.from('biblioteca_personal').select('*').eq('id_usuario', user.id_usuario);
       setItems(data || []);
       if (!user.nombre || user.nombre === 'Lector') setShowOnboarding(true);
     }
+    setProfile(user);
   };
 
   useEffect(() => {
@@ -188,7 +199,10 @@ export default function PerfilLector() {
 
     const { data: urlData } = supabase.storage.from('biblioteca-archivos').getPublicUrl(path);
     const avatar_url = `${urlData.publicUrl}?v=${Date.now()}`;
-    await supabase.from('usuarios').update({ avatar_url }).eq('id_usuario', profile.id_usuario);
+    // Intentar guardar en tabla, pero si falla por RLS igual mostramos la foto
+    await supabase.from('usuarios').update({ avatar_url }).eq('id_usuario', profile.id_usuario).then(({ error }) => {
+      if (error) console.warn('No se pudo guardar avatar_url en usuarios (RLS):', error.message);
+    });
     setProfile((p) => ({ ...p, avatar_url }));
     setUploadingPhoto(false);
     setNotice('¡Foto actualizada!');
