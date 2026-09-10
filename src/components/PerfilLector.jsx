@@ -1,11 +1,11 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Camera, ChevronDown, ChevronUp, ExternalLink, LogIn, LogOut, UserRound, X } from 'lucide-react';
+import { BookOpen, Camera, ExternalLink, LogIn, LogOut, UserRound, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
-/* ─── Onboarding modal: primer login ─────────────────────── */
-function OnboardingModal({ email, onSave }) {
+/* ─── Onboarding ─────────────────────────────────────────── */
+function OnboardingModal({ onSave }) {
   const [nombre, setNombre] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
@@ -13,12 +13,7 @@ function OnboardingModal({ email, onSave }) {
     if (!name) return setError('Escribí tu nombre.');
     if (name.length < 2) return setError('Debe tener al menos 2 caracteres.');
     setLoading(true);
-    // Verificar unicidad (case-insensitive)
-    const { data: existing } = await supabase
-      .from('usuarios')
-      .select('id_usuario')
-      .ilike('nombre', name)
-      .limit(1);
+    const { data: existing } = await supabase.from('usuarios').select('id_usuario').ilike('nombre', name).limit(1);
     if (existing?.length) { setLoading(false); return setError('Ese nombre ya está en uso. Elegí otro.'); }
     await onSave(name);
     setLoading(false);
@@ -30,69 +25,66 @@ function OnboardingModal({ email, onSave }) {
         <div className="rp-onboarding-icon">👋</div>
         <h2>¡Bienvenido/a a Biblioteca KTB!</h2>
         <p>¿Cómo querés que te llamemos, lector/a?</p>
-        <input
-          className="rp-onboarding-input"
-          value={nombre}
-          onChange={(e) => { setNombre(e.target.value); setError(''); }}
-          placeholder="Tu nombre de usuario…"
-          maxLength={40}
-          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-          autoFocus
-        />
+        <input className="rp-onboarding-input" value={nombre} onChange={(e) => { setNombre(e.target.value); setError(''); }} placeholder="Tu nombre de usuario…" maxLength={40} onKeyDown={(e) => e.key === 'Enter' && handleSave()} autoFocus />
         {error && <p className="rp-onboarding-error">{error}</p>}
-        <button className="rp-onboarding-btn" onClick={handleSave} disabled={loading}>
-          {loading ? 'Guardando…' : 'Confirmar nombre'}
-        </button>
+        <button className="rp-onboarding-btn" onClick={handleSave} disabled={loading}>{loading ? 'Guardando…' : 'Confirmar nombre'}</button>
         <small className="rp-onboarding-hint">Podés cambiarlo después desde tu perfil.</small>
       </div>
     </div>
   );
 }
 
-/* ─── Mini catálogo de libros de la lista ─────────────────── */
-function ListCatalog({ rows, onSelect, onRemove }) {
-  if (!rows.length) return <p className="rp-list-empty">Aún no hay libros en esta lista.</p>;
+/* ─── Modal catálogo de lista (igual estilo que TopRated) ─── */
+function ListModal({ config, rows, onClose, onSelect, onRemove }) {
   return (
-    <div className="rp-list-grid">
-      {rows.map(({ item, book }) => {
-        const src = book.imagen_portada || book.imagen;
-        const isVirtual = /virtual|digital|pdf/i.test(String(book.tipo_libro || ''));
-        const url = book.archivo_pdf || book.pdf;
-        return (
-          <div key={item.id_biblioteca_personal} className="rp-list-card">
-            <button className="rp-list-cover" onClick={() => onSelect(book)}>
-              {src ? <img src={src} alt={book.titulo} /> : <BookOpen size={22} />}
-            </button>
-            <div className="rp-list-info">
-              <span className="rp-list-title" onClick={() => onSelect(book)}>{book.titulo}</span>
-              <span className="rp-list-type">{isVirtual ? 'Virtual' : 'Físico'}</span>
-            </div>
-            <div className="rp-list-actions">
-              {isVirtual && url && (
-                <a href={url} target="_blank" rel="noreferrer" className="rp-list-btn rp-list-read">
-                  <ExternalLink size={13} /> Leer
-                </a>
-              )}
-              <button className="rp-list-btn rp-list-remove" onClick={() => onRemove(item)}>✕</button>
-            </div>
+    <div className="rp-modal-backdrop" onMouseDown={onClose}>
+      <section className="rp-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="rp-modal-head">
+          <div>
+            <p className="rp-modal-eyebrow">MI BIBLIOTECA</p>
+            <h2>{config.icon} {config.label}</h2>
+            <p className="rp-modal-sub">{rows.length} libro{rows.length !== 1 ? 's' : ''}</p>
           </div>
-        );
-      })}
+          <button className="rp-modal-close" onClick={onClose} aria-label="Cerrar"><X size={20} /></button>
+        </div>
+        <div className="rp-modal-list">
+          {!rows.length && <p className="rp-modal-empty">Aún no hay libros en esta lista.</p>}
+          {rows.map(({ item, book }) => {
+            const src = book.imagen_portada || book.imagen;
+            const isVirtual = /virtual|digital|pdf/i.test(String(book.tipo_libro || ''));
+            const url = book.archivo_pdf || book.pdf;
+            return (
+              <div key={item.id_biblioteca_personal} className="rp-modal-item">
+                <button className="rp-modal-cover" onClick={() => { onSelect(book); onClose(); }}>
+                  {src ? <img src={src} alt={book.titulo} /> : <BookOpen size={18} />}
+                </button>
+                <div className="rp-modal-info" onClick={() => { onSelect(book); onClose(); }}>
+                  <span className="rp-modal-title">{book.titulo}</span>
+                  <span className="rp-modal-type">{book.tipo_libro || 'Libro'}</span>
+                  {book.sinopsis && <p className="rp-modal-synopsis">{book.sinopsis.slice(0, 100)}{book.sinopsis.length > 100 ? '…' : ''}</p>}
+                </div>
+                <div className="rp-modal-actions">
+                  {isVirtual && url && <a href={url} target="_blank" rel="noreferrer" className="rp-modal-read"><ExternalLink size={13} /></a>}
+                  <button className="rp-modal-remove" onClick={() => onRemove(item)} title="Quitar">✕</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
 
-/* ─── Modal de detalle de libro desde perfil ─────────────── */
+/* ─── Modal detalle libro ────────────────────────────────── */
 function ProfileBookModal({ book, onClose }) {
-  const url = book.archivo_pdf || book.pdf;
+  const url     = book.archivo_pdf || book.pdf;
   const virtual = /virtual|digital|pdf/i.test(String(book.tipo_libro || ''));
   return (
     <div className="reader-book-modal-backdrop" onMouseDown={onClose}>
       <section className="reader-book-modal" onMouseDown={(e) => e.stopPropagation()}>
         <button className="reader-book-close" onClick={onClose}><X /></button>
-        {(book.imagen_portada || book.imagen)
-          ? <img src={book.imagen_portada || book.imagen} alt={`Portada de ${book.titulo}`} />
-          : <BookOpen />}
+        {(book.imagen_portada || book.imagen) ? <img src={book.imagen_portada || book.imagen} alt={book.titulo} /> : <BookOpen />}
         <div>
           <p>{book.tipo_libro || 'Libro'}</p>
           <h2>{book.titulo}</h2>
@@ -104,46 +96,32 @@ function ProfileBookModal({ book, onClose }) {
   );
 }
 
-/* ─── Sección de lista (botón + catálogo desplegable) ─────── */
+/* ─── Config listas ──────────────────────────────────────── */
 const LIST_CONFIG = [
-  { key: 'Leyendo',      icon: '📖', label: 'Leyendo',       color: '#e2bd65' },
-  { key: 'Leer después', icon: '🕐', label: 'Leer después',  color: '#9a7dd4' },
-  { key: 'Finalizado',   icon: '✅', label: 'Finalizados',   color: '#4caf7d' },
+  { key: 'Leyendo',      icon: '📖', label: 'Leyendo',      color: '#e2bd65' },
+  { key: 'Leer después', icon: '🕐', label: 'Leer después', color: '#9a7dd4' },
+  { key: 'Finalizado',   icon: '✅', label: 'Finalizados',  color: '#4caf7d' },
 ];
 
-function ListSection({ config, rows, onSelect, onRemove }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rp-list-section">
-      <button className="rp-list-btn-main" onClick={() => setOpen((p) => !p)}>
-        <span className="rp-list-icon">{config.icon}</span>
-        <span className="rp-list-label">{config.label}</span>
-        <span className="rp-list-count" style={{ background: config.color }}>{rows.length}</span>
-        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-      </button>
-      {open && <ListCatalog rows={rows} onSelect={onSelect} onRemove={onRemove} />}
-    </div>
-  );
-}
-
-/* ─── Componente principal ────────────────────────────────── */
+/* ─── Componente principal ───────────────────────────────── */
 export default function PerfilLector() {
-  const [open, setOpen]           = useState(false);
-  const [session, setSession]     = useState(null);
-  const [profile, setProfile]     = useState(null);
-  const [books, setBooks]         = useState([]);
-  const [items, setItems]         = useState([]);
-  const [notice, setNotice]       = useState('');
-  const [selected, setSelected]   = useState(null);
+  const [open, setOpen]                     = useState(false);
+  const [session, setSession]               = useState(null);
+  const [profile, setProfile]               = useState(null);
+  const [books, setBooks]                   = useState([]);
+  const [items, setItems]                   = useState([]);
+  const [notice, setNotice]                 = useState('');
+  const [selected, setSelected]             = useState(null);
+  const [activeList, setActiveList]         = useState(null); // config de lista abierta
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [currentSection, setCurrentSection] = useState(() => sessionStorage.getItem('ktb-section') || 'inicio');
   const fileRef = useRef(null);
 
   useEffect(() => {
-    const handler = () => setCurrentSection(sessionStorage.getItem('ktb-section') || 'inicio');
-    window.addEventListener('ktb-section-change', handler);
-    return () => window.removeEventListener('ktb-section-change', handler);
+    const h = () => setCurrentSection(sessionStorage.getItem('ktb-section') || 'inicio');
+    window.addEventListener('ktb-section-change', h);
+    return () => window.removeEventListener('ktb-section-change', h);
   }, []);
 
   const load = async (current) => {
@@ -158,15 +136,13 @@ export default function PerfilLector() {
     if (user) {
       const { data } = await supabase.from('biblioteca_personal').select('*').eq('id_usuario', user.id_usuario);
       setItems(data || []);
-      // Primer login: si no tiene apellido ni nombre personalizado (viene del google metadata)
-      const needsOnboarding = user && (!user.nombre || user.nombre === 'Lector');
-      if (needsOnboarding) setShowOnboarding(true);
+      if (!user.nombre || user.nombre === 'Lector') setShowOnboarding(true);
     }
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => load(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, current) => load(current));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, c) => load(c));
     return () => subscription.unsubscribe();
   }, []);
 
@@ -174,39 +150,50 @@ export default function PerfilLector() {
 
   const selectedBooks = useMemo(() =>
     items.map((item) => ({ item, book: books.find((b) => String(b.id_libro) === String(item.id_libro)) }))
-      .filter((row) => row.book),
+         .filter((r) => r.book),
   [items, books]);
 
-  const group = (name) => selectedBooks.filter(({ item }) => item.estado === name);
+  const group = (key) => selectedBooks.filter(({ item }) => item.estado === key);
 
-  /* Guardar nombre desde onboarding */
   const saveNombre = async (nombre) => {
     if (!profile) return;
-    const { error } = await supabase.from('usuarios').update({ nombre }).eq('id_usuario', profile.id_usuario);
-    if (error) return;
+    await supabase.from('usuarios').update({ nombre }).eq('id_usuario', profile.id_usuario);
     setProfile((p) => ({ ...p, nombre }));
     setShowOnboarding(false);
   };
 
-  /* Subir foto de perfil */
+  /* Subir foto — intenta primero en biblioteca-archivos, con upsert */
   const handlePhotoUpload = async (file) => {
     if (!file || !profile) return;
     setUploadingPhoto(true);
-    const ext = file.name.split('.').pop();
+    setNotice('');
+
+    // Limpiar nombre del archivo
+    const ext  = file.name.split('.').pop().toLowerCase();
     const path = `avatars/${profile.id_usuario}.${ext}`;
+
+    // Primero intenta remove (silencioso), luego upload
+    await supabase.storage.from('biblioteca-archivos').remove([path]);
+
     const { error: uploadError } = await supabase.storage
       .from('biblioteca-archivos')
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (uploadError) { setNotice('No se pudo subir la foto.'); setUploadingPhoto(false); return; }
+      .upload(path, file, { cacheControl: '0', upsert: true, contentType: file.type });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      setNotice(`Error al subir: ${uploadError.message}`);
+      setUploadingPhoto(false);
+      return;
+    }
+
     const { data: urlData } = supabase.storage.from('biblioteca-archivos').getPublicUrl(path);
-    const avatar_url = urlData.publicUrl + '?t=' + Date.now();
+    const avatar_url = `${urlData.publicUrl}?v=${Date.now()}`;
     await supabase.from('usuarios').update({ avatar_url }).eq('id_usuario', profile.id_usuario);
     setProfile((p) => ({ ...p, avatar_url }));
     setUploadingPhoto(false);
-    setNotice('Foto actualizada.');
+    setNotice('¡Foto actualizada!');
   };
 
-  /* Eliminar libro de la lista */
   const removeItem = async (item) => {
     await supabase.from('biblioteca_personal').delete().eq('id_biblioteca_personal', item.id_biblioteca_personal);
     setItems((prev) => prev.filter((i) => i.id_biblioteca_personal !== item.id_biblioteca_personal));
@@ -215,19 +202,15 @@ export default function PerfilLector() {
   const login  = () => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
   const logout = () => supabase.auth.signOut();
 
-  const totalLibros = selectedBooks.length;
-
   return (
     <>
       {!/^admin/.test(currentSection) && (
-        <button className="reader-profile-fab" onClick={() => setOpen(true)} title="Abrir mi perfil">
+        <button className="reader-profile-fab" onClick={() => setOpen(true)} title="Mi perfil">
           <UserRound /> Mi perfil
         </button>
       )}
 
-      {showOnboarding && session && (
-        <OnboardingModal email={session.user.email} onSave={saveNombre} />
-      )}
+      {showOnboarding && session && <OnboardingModal onSave={saveNombre} />}
 
       {open && (
         <div className="reader-profile-backdrop" onMouseDown={() => setOpen(false)}>
@@ -235,7 +218,6 @@ export default function PerfilLector() {
             <button className="reader-profile-close" onClick={() => setOpen(false)}><X /></button>
 
             {!session || !profile ? (
-              /* ── Sin sesión ── */
               <div className="reader-profile-empty">
                 <UserRound />
                 <h2>Tu perfil lector</h2>
@@ -244,65 +226,64 @@ export default function PerfilLector() {
               </div>
             ) : (
               <>
-                {/* ── Header ── */}
+                {/* Header */}
                 <div className="rp-header">
                   <button className="rp-logout" onClick={logout} title="Cerrar sesión"><LogOut size={16} /></button>
 
-                  {/* Avatar */}
                   <div className="rp-avatar-wrap">
                     <div className="rp-avatar">
                       {profile.avatar_url
                         ? <img src={profile.avatar_url} alt="Avatar" />
                         : <span>{(profile.nombre || profile.email)[0].toUpperCase()}</span>}
-                      <button
-                        className="rp-avatar-edit"
-                        onClick={() => fileRef.current?.click()}
-                        title="Cambiar foto"
-                        disabled={uploadingPhoto}
-                      >
+                      <button className="rp-avatar-edit" onClick={() => fileRef.current?.click()} title="Cambiar foto" disabled={uploadingPhoto}>
                         <Camera size={13} />
                       </button>
                     </div>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      style={{ display: 'none' }}
-                      onChange={(e) => handlePhotoUpload(e.target.files?.[0])}
-                    />
+                    <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={(e) => handlePhotoUpload(e.target.files?.[0])} />
                     {uploadingPhoto && <small className="rp-uploading">Subiendo…</small>}
                   </div>
 
                   <h2 className="rp-name">{profile.nombre} {profile.apellido || ''}</h2>
                   <p className="rp-email">{profile.email}</p>
 
-                  {/* Contador total */}
                   <div className="rp-stats">
                     <div className="rp-stat">
-                      <strong>{totalLibros}</strong>
-                      <span>libro{totalLibros !== 1 ? 's' : ''} guardado{totalLibros !== 1 ? 's' : ''}</span>
+                      <strong>{selectedBooks.length}</strong>
+                      <span>libro{selectedBooks.length !== 1 ? 's' : ''} guardado{selectedBooks.length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                 </div>
 
-                {notice && <p className="reader-notice rp-notice">{notice}</p>}
+                {notice && <p className="rp-notice-bar">{notice}</p>}
 
-                {/* ── Listas con botones ── */}
+                {/* Botones de lista */}
                 <div className="rp-lists">
-                  {LIST_CONFIG.map((cfg) => (
-                    <ListSection
-                      key={cfg.key}
-                      config={cfg}
-                      rows={group(cfg.key)}
-                      onSelect={(book) => { setSelected(book); }}
-                      onRemove={removeItem}
-                    />
-                  ))}
+                  {LIST_CONFIG.map((cfg) => {
+                    const count = group(cfg.key).length;
+                    return (
+                      <button key={cfg.key} className="rp-list-btn-main" onClick={() => setActiveList(cfg)}>
+                        <span className="rp-list-icon">{cfg.icon}</span>
+                        <span className="rp-list-label">{cfg.label}</span>
+                        <span className="rp-list-count" style={{ background: cfg.color }}>{count}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             )}
           </section>
         </div>
+      )}
+
+      {/* Modal de lista */}
+      {activeList && (
+        <ListModal
+          config={activeList}
+          rows={group(activeList.key)}
+          onClose={() => setActiveList(null)}
+          onSelect={setSelected}
+          onRemove={removeItem}
+        />
       )}
 
       {selected && <ProfileBookModal book={selected} onClose={() => setSelected(null)} />}
