@@ -246,3 +246,10 @@
 /* ── Topbar brand modo claro: KTB en vino oscuro ────────── */
 .topbar-brand-name{color:#3d0e18}
 .topbar-brand-name em{color:#d4b36d}
+
+/* ── Fix dropdown filtros sobre tarjetas del catálogo ────── */
+/* Las tarjetas con animation/transform crean stacking contexts
+   que tapan el dropdown aunque tenga z-index alto.
+   La sección filters necesita su propio stacking context superior. */
+.filters{position:relative;z-index:20}
+.catalog-grid{position:relative;z-index:1}
