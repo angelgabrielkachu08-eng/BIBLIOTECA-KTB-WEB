@@ -225,3 +225,20 @@
   .page>*{animation:none}
   .catalog-card{animation:card-rise .25s ease both}
 }
+
+/* ── Dark mode: modal catálogo de lista ──────────────────── */
+[data-theme="dark"] .rp-modal{background:#2a0810;border-color:#5a1724}
+[data-theme="dark"] .rp-modal-head{background:#3a0b15;border-color:#5a1724}
+[data-theme="dark"] .rp-modal-head h2{color:#e2bd65}
+[data-theme="dark"] .rp-modal-eyebrow{color:#c9a050}
+[data-theme="dark"] .rp-modal-sub{color:#d4a8b0}
+[data-theme="dark"] .rp-modal-close{color:#d4a8b0}
+[data-theme="dark"] .rp-modal-close:hover{color:#e2bd65}
+[data-theme="dark"] .rp-modal-item{border-color:#3a0b15}
+[data-theme="dark"] .rp-modal-item:hover{background:#3a0b15}
+[data-theme="dark"] .rp-modal-title{color:#e2bd65}
+[data-theme="dark"] .rp-modal-type{color:#c9a050}
+[data-theme="dark"] .rp-modal-synopsis{color:#d4a8b0}
+[data-theme="dark"] .rp-modal-empty{color:#d4a8b0}
+[data-theme="dark"] .rp-modal-remove{background:#3a0b15;border-color:#7e2638;color:#d4a8b0}
+[data-theme="dark"] .rp-modal-remove:hover{background:#a9473d;color:#fff}

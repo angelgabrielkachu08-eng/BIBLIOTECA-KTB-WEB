@@ -173,18 +173,16 @@ export default function PerfilLector() {
     setShowOnboarding(false);
   };
 
-  /* Subir foto — intenta primero en biblioteca-archivos, con upsert */
   const handlePhotoUpload = async (file) => {
     if (!file || !profile) return;
     setUploadingPhoto(true);
     setNotice('');
 
-    // Limpiar nombre del archivo
     const ext  = file.name.split('.').pop().toLowerCase();
     const path = `avatars/${profile.id_usuario}.${ext}`;
 
-    // Primero intenta remove (silencioso), luego upload
-    await supabase.storage.from('biblioteca-archivos').remove([path]);
+    // Intentar borrar versión anterior — ignorar si falla
+    try { await supabase.storage.from('biblioteca-archivos').remove([path]); } catch { /* ok */ }
 
     const { error: uploadError } = await supabase.storage
       .from('biblioteca-archivos')
@@ -199,10 +197,15 @@ export default function PerfilLector() {
 
     const { data: urlData } = supabase.storage.from('biblioteca-archivos').getPublicUrl(path);
     const avatar_url = `${urlData.publicUrl}?v=${Date.now()}`;
-    // Intentar guardar en tabla, pero si falla por RLS igual mostramos la foto
-    await supabase.from('usuarios').update({ avatar_url }).eq('id_usuario', profile.id_usuario).then(({ error }) => {
-      if (error) console.warn('No se pudo guardar avatar_url en usuarios (RLS):', error.message);
-    });
+
+    // Guardar en tabla (ya tiene política RLS)
+    const { error: updateError } = await supabase
+      .from('usuarios')
+      .update({ avatar_url })
+      .eq('id_usuario', profile.id_usuario);
+
+    if (updateError) console.warn('No se pudo guardar avatar_url:', updateError.message);
+
     setProfile((p) => ({ ...p, avatar_url }));
     setUploadingPhoto(false);
     setNotice('¡Foto actualizada!');
