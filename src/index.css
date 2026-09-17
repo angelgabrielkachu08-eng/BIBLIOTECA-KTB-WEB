@@ -253,3 +253,8 @@
    La sección filters necesita su propio stacking context superior. */
 .filters{position:relative;z-index:20}
 .catalog-grid{position:relative;z-index:1}
+
+/* ── Bloqueo de scroll del body cuando hay modal abierto ─── */
+body.modal-open{overflow:hidden;touch-action:none;overscroll-behavior:none}
+/* iOS Safari necesita esto en el html también */
+html.modal-open{overflow:hidden}

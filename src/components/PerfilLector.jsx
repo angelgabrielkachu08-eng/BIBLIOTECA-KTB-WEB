@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Camera, ExternalLink, LogIn, LogOut, UserRound, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { useModalLock } from '../useModalLock';
 
 /* ─── Onboarding ─────────────────────────────────────────── */
 function OnboardingModal({ onSave }) {
@@ -117,6 +118,9 @@ export default function PerfilLector() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [currentSection, setCurrentSection] = useState(() => sessionStorage.getItem('ktb-section') || 'inicio');
   const fileRef = useRef(null);
+
+  // Bloquear scroll del body cuando el perfil o cualquier modal está abierto
+  useModalLock(open || !!activeList || !!selected || showOnboarding);
 
   useEffect(() => {
     const h = () => setCurrentSection(sessionStorage.getItem('ktb-section') || 'inicio');

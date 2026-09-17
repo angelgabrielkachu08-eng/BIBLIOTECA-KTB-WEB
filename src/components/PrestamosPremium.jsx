@@ -3,6 +3,7 @@ import { AlertTriangle, BookOpen, CalendarClock, CheckCircle2, ClipboardPlus, Fi
 import emailjs from '@emailjs/browser';
 import { supabase } from '../supabaseClient';
 import './PrestamosPremium.css';
+import { useModalLock } from '../useModalLock';
 
 const EMAILJS_SERVICE  = 'service_zc0ntpc';
 const EMAILJS_KEY      = 'PNsVufWyg73IVaqKF';
@@ -19,6 +20,8 @@ export default function PrestamosPremium() {
   const [profile, setProfile] = useState(null), [open, setOpen] = useState(false), [data, setData] = useState({ books: [], users: [], loans: [], details: [], reservations: [], penalties: [], renewals: [], policy: null }), [tab, setTab] = useState('panel'), [filter, setFilter] = useState('activos'), [notice, setNotice] = useState('');
   const [lend, setLend] = useState({ user: '', book: '', days: 7 }), [historyUser, setHistoryUser] = useState(''), [policyDraft, setPolicyDraft] = useState(null), [sanctionAlert, setSanctionAlert] = useState(null);
   const [currentSection, setCurrentSection] = useState(() => sessionStorage.getItem('ktb-section') || 'inicio');
+  // Bloquear scroll cuando el panel o modal de sanción está abierto
+  useModalLock(open || !!sanctionAlert);
   useEffect(() => {
     const handler = () => setCurrentSection(sessionStorage.getItem('ktb-section') || 'inicio');
     window.addEventListener('ktb-section-change', handler);
