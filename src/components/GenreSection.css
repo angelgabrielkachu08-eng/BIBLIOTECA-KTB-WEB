@@ -190,3 +190,37 @@
 @media (prefers-reduced-motion: reduce) {
   .gs-track { animation: none; }
 }
+
+/* ── Modal de género ─────────────────────────────────────── */
+.gs-modal-backdrop{position:fixed;inset:0;z-index:60;background:#2a0810bb;display:grid;place-items:center;padding:20px;backdrop-filter:blur(4px)}
+.gs-modal{width:min(680px,100%);max-height:88vh;background:#fffdf8;border:1px solid #d4c3a0;display:flex;flex-direction:column;box-shadow:0 28px 70px #0007;overflow:hidden;animation:gs-modal-in .25s cubic-bezier(.16,1,.3,1) both}
+@keyframes gs-modal-in{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.gs-modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 22px 14px;border-bottom:1px solid #e5ddd0;background:#faf7ef;flex-shrink:0}
+.gs-modal-eyebrow{margin:0 0 3px;font-size:9px;font-weight:700;letter-spacing:1.6px;color:#97793f}
+.gs-modal-icon{margin-right:8px;font-size:20px}
+.gs-modal-title{margin:3px 0 0;font:600 22px 'Playfair Display';color:#3f0d18;display:flex;align-items:center}
+.gs-modal-sub{margin:4px 0 0;font-size:11px;color:#7a5a60}
+.gs-modal-close{background:none;border:none;color:#7a5a60;cursor:pointer;padding:4px;flex-shrink:0;transition:color .15s}
+.gs-modal-close:hover{color:#3f0d18}
+.gs-modal-list{overflow-y:auto;flex:1;padding:4px 0}
+.gs-modal-item{display:flex;align-items:stretch;gap:0;width:100%;border:none;border-bottom:1px solid #ede8df;background:none;cursor:pointer;text-align:left;padding:0;transition:background .12s}
+.gs-modal-item:hover{background:#faf3e6}
+.gs-modal-item:last-child{border-bottom:none}
+.gs-modal-cover{flex:0 0 72px;width:72px;height:100px;overflow:hidden;background:linear-gradient(145deg,#6b1f30,#3d0e18);display:flex;align-items:center;justify-content:center;color:#f1dfb2;position:relative;flex-shrink:0}
+.gs-modal-cover img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.gs-modal-cover b{position:absolute;bottom:0;left:0;right:0;background:#2a0810cc;font-size:8px;text-align:center;color:#e2bd65;padding:2px;text-transform:uppercase;letter-spacing:.5px}
+.gs-modal-info{padding:12px 16px;display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.gs-modal-book-title{margin:0;font:600 14px/1.2 'Playfair Display';color:#3d0e18;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.gs-modal-author{margin:0;font-size:11px;color:#7a5a60;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-modal-rating{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#99783a}
+.gs-modal-synopsis{margin:4px 0 0;font-size:11px;color:#5a4a4e;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.gs-modal-empty{padding:30px;text-align:center;color:#7a5a60;font-size:13px;margin:0}
+/* Dark mode */
+[data-theme="dark"] .gs-modal{background:#2a0810;border-color:#5a1724}
+[data-theme="dark"] .gs-modal-head{background:#3a0b15;border-color:#5a1724}
+[data-theme="dark"] .gs-modal-title{color:#e2bd65}
+[data-theme="dark"] .gs-modal-item{border-color:#3a0b15}
+[data-theme="dark"] .gs-modal-item:hover{background:#3a0b15}
+[data-theme="dark"] .gs-modal-book-title{color:#f3ead9}
+[data-theme="dark"] .gs-modal-synopsis{color:#d4a8b0}
+@media(max-width:760px){.gs-modal{max-height:92vh}.gs-modal-cover{width:58px;flex-basis:58px;height:84px}}
