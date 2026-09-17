@@ -146,7 +146,15 @@ export default function PerfilLector() {
       }
       const { data } = await supabase.from('biblioteca_personal').select('*').eq('id_usuario', user.id_usuario);
       setItems(data || []);
-      if (!user.nombre || user.nombre === 'Lector') setShowOnboarding(true);
+      // Disparar onboarding si: no tiene nombre, es 'Lector', o el nombre está duplicado en apellido
+      const nombreLower = (user.nombre || '').trim().toLowerCase();
+      const apellidoLower = (user.apellido || '').trim().toLowerCase();
+      const isDuplicated = apellidoLower && nombreLower && (
+        apellidoLower === nombreLower ||
+        apellidoLower.startsWith(nombreLower + ' ') ||
+        nombreLower.startsWith(apellidoLower + ' ')
+      );
+      if (!user.nombre || user.nombre === 'Lector' || isDuplicated) setShowOnboarding(true);
     }
     setProfile(user);
   };
@@ -168,8 +176,9 @@ export default function PerfilLector() {
 
   const saveNombre = async (nombre) => {
     if (!profile) return;
-    await supabase.from('usuarios').update({ nombre }).eq('id_usuario', profile.id_usuario);
-    setProfile((p) => ({ ...p, nombre }));
+    // Guardar nombre elegido y limpiar apellido para evitar duplicados del Google profile
+    await supabase.from('usuarios').update({ nombre, apellido: null }).eq('id_usuario', profile.id_usuario);
+    setProfile((p) => ({ ...p, nombre, apellido: null }));
     setShowOnboarding(false);
   };
 
