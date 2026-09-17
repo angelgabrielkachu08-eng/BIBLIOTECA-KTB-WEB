@@ -70,6 +70,8 @@ export default function PrestamosPremium() {
         user_name:  `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
         book_title: book?.titulo || 'tu libro',
         due_date:   labelDate(deadline),
+        subject:    `Tu reserva fue aprobada — ${book?.titulo || 'tu libro'}`,
+        message:    `Hola ${user?.nombre || 'lector/a'}, ¡tu reserva de "${book?.titulo || 'tu libro'}" fue aprobada! Ya podés pasar a retirarlo por la biblioteca. Tenés 24 horas para hacerlo, pasado ese plazo el pedido se cancela automáticamente. Fecha límite de devolución: ${labelDate(deadline)}.`,
       });
       await load();
       flash(`Reserva aprobada. Se notificó a ${user?.email || 'el lector'}.`);
@@ -85,6 +87,8 @@ export default function PrestamosPremium() {
         to_email:   user?.email || '',
         user_name:  `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
         book_title: book?.titulo || 'tu libro',
+        subject:    `Sobre tu reserva — ${book?.titulo || 'tu libro'}`,
+        message:    `Hola ${user?.nombre || 'lector/a'}, en este momento tenemos inconvenientes para procesar tu reserva de "${book?.titulo || 'tu libro'}" por este medio. Te pedimos disculpas. Podés acercarte a la biblioteca para consultas, préstamos o más información.`,
       });
       await load();
       flash(`Reserva denegada. Se notificó a ${user?.email || 'el lector'}.`);
