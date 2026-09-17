@@ -258,3 +258,5 @@
 body.modal-open{overflow:hidden;touch-action:none;overscroll-behavior:none}
 /* iOS Safari necesita esto en el html también */
 html.modal-open{overflow:hidden}
+
+[data-theme="dark"] .hero h2{color:#f0d080}
