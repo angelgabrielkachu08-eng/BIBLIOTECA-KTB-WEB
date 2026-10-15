@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import ePub from 'epubjs';
 import { BookOpen, ChevronLeft, ChevronRight, Minus, Plus, Search, Settings, Type, X } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 import './ReaderModal.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -76,10 +77,29 @@ export default function ReaderModal({ book, onClose }) {
     rendition.current.themes.override('color', colors.color, true);
   }, [isEpub, font, fontSize, colors]);
 
-  const translate = () => {
-    if (!selection) return;
-    window.open(`https://translate.google.com/?sl=auto&tl=es&text=${encodeURIComponent(selection)}&op=translate`, '_blank', 'noopener,noreferrer');
+  const saveReaderNote = async (type) => {
+    const content = selection.trim();
+    if (!content) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setError('Iniciá sesión para guardar palabras y citas.'); return; }
+    const { error: saveError } = await supabase.from('lector_notas').insert({
+      owner_uid: user.id,
+      tipo: type,
+      contenido: content,
+      palabra: type === 'diccionario' ? content : null,
+      id_libro: book.id_libro == null ? null : String(book.id_libro),
+      libro_titulo: book.titulo || 'Libro',
+      libro_autor: book.author || book.autor || null,
+      libro_portada: book.cover || book.imagen_portada || book.imagen || null,
+    });
+    if (saveError) { setError(`No se pudo guardar: ${saveError.message}`); return; }
     setMenuPoint(null);
+    if (type === 'diccionario') {
+      window.open(`https://www.google.com/search?q=${encodeURIComponent(`significado de ${content}`)}`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setSelection('');
+    window.getSelection()?.removeAllRanges();
   };
   const copy = async () => { await navigator.clipboard?.writeText(selection); setMenuPoint(null); };
   const changePage = (direction) => {
@@ -124,10 +144,10 @@ export default function ReaderModal({ book, onClose }) {
           <div className="pdf-pages" style={{ filter: colors.filter }}><div className="pdf-page"><Page pageNumber={page} scale={fontSize / 18} renderTextLayer renderAnnotationLayer /></div></div>
         </Document>}
         {menuPoint && selection && <div className="reader-selection-menu" style={{ left: Math.max(8, Math.min(menuPoint.x, window.innerWidth - 230)), top: Math.max(8, Math.min(menuPoint.y, window.innerHeight - 90)) }}>
-          <button onClick={translate}><Search size={15} /> Traducir en Google</button><button onClick={copy}>Copiar texto</button><button onClick={() => setMenuPoint(null)} aria-label="Cerrar opciones"><X size={14} /></button>
+          <button onClick={() => saveReaderNote('diccionario')}><Search size={15} /> Diccionario</button><button onClick={() => saveReaderNote('cita')}>Citar</button><button onClick={copy}>Copiar texto</button><button onClick={() => setMenuPoint(null)} aria-label="Cerrar opciones"><X size={14} /></button>
         </div>}
       </main>
-      <footer className="reader-foot"><Settings size={14} /> EPUB {readingMode === 'vertical' ? '· Desliza hacia arriba o abajo para leer' : '· Desliza hacia los lados para cambiar de página'} · Selecciona una palabra para traducirla.</footer>
+      <footer className="reader-foot"><Settings size={14} /> EPUB {readingMode === 'vertical' ? '· Desliza hacia arriba o abajo para leer' : '· Desliza hacia los lados para cambiar de página'} · Selecciona una palabra para consultar su significado o una frase para citar.</footer>
     </section>
   </div>;
 }
