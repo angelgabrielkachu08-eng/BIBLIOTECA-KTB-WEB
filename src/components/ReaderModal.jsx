@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import ePub from 'epubjs';
+import JSZip from 'jszip';
 import { BookOpen, ChevronLeft, ChevronRight, Minus, Plus, Search, Settings, Type, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import './ReaderModal.css';
@@ -16,15 +16,80 @@ const themes = {
   Vino: { background: '#35101b', color: '#f6e9d4', filter: 'sepia(.22) saturate(.78)' },
 };
 
+const resolveZipPath = (baseFile, href) => {
+  const cleanHref = decodeURIComponent(String(href || '').split('#')[0].split('?')[0]);
+  const parts = (cleanHref.startsWith('/') ? [] : baseFile.split('/').slice(0, -1));
+  for (const part of cleanHref.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return parts.join('/');
+};
+
+const readEpub = async (url, signal) => {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`No se pudo descargar el EPUB (${response.status}).`);
+  const archive = await JSZip.loadAsync(await response.arrayBuffer());
+  const containerFile = archive.file('META-INF/container.xml');
+  if (!containerFile) throw new Error('El archivo no contiene META-INF/container.xml.');
+  const parser = new DOMParser();
+  const container = parser.parseFromString(await containerFile.async('string'), 'application/xml');
+  const opfPath = container.getElementsByTagName('rootfile')[0]?.getAttribute('full-path');
+  if (!opfPath) throw new Error('No se encontró el paquete OPF del EPUB.');
+  const opfFile = archive.file(opfPath);
+  if (!opfFile) throw new Error('No se pudo encontrar el archivo OPF del EPUB.');
+  const opf = parser.parseFromString(await opfFile.async('string'), 'application/xml');
+  const manifest = new Map([...opf.getElementsByTagName('item')].map((item) => [item.getAttribute('id'), item]));
+  const spine = [...opf.getElementsByTagName('itemref')];
+  const chapters = [];
+  for (const itemref of spine) {
+    const item = manifest.get(itemref.getAttribute('idref'));
+    const href = item?.getAttribute('href');
+    if (!href || itemref.getAttribute('linear') === 'no') continue;
+    const path = resolveZipPath(opfPath, href);
+    const file = archive.file(path);
+    if (!file) continue;
+    const document = parser.parseFromString(await file.async('string'), 'text/html');
+    document.querySelectorAll('script, iframe, frame, object, embed, form, link[rel="stylesheet"]').forEach((node) => node.remove());
+    document.querySelectorAll('[style]').forEach((node) => node.removeAttribute('style'));
+    document.querySelectorAll('*').forEach((node) => {
+      [...node.attributes].forEach((attribute) => {
+        if (/^on/i.test(attribute.name) || /^(?:javascript|vbscript):/i.test(attribute.value.trim())) {
+          node.removeAttribute(attribute.name);
+        }
+      });
+    });
+    for (const image of document.querySelectorAll('img[src], image[href]')) {
+      const attr = image.hasAttribute('src') ? 'src' : 'href';
+      const imagePath = resolveZipPath(path, image.getAttribute(attr));
+      const imageFile = archive.file(imagePath);
+      if (!imageFile) { image.remove(); continue; }
+      const type = imageFile.name.toLowerCase().endsWith('.png') ? 'image/png'
+        : imageFile.name.toLowerCase().endsWith('.webp') ? 'image/webp'
+          : imageFile.name.toLowerCase().endsWith('.gif') ? 'image/gif' : 'image/jpeg';
+      image.setAttribute(attr, `data:${type};base64,${await imageFile.async('base64')}`);
+    }
+    document.querySelectorAll('a[href]').forEach((anchor) => {
+      anchor.removeAttribute('href');
+      anchor.removeAttribute('target');
+    });
+    const body = document.body;
+    const title = body.querySelector('h1,h2,h3')?.textContent?.trim()
+      || document.title?.trim() || `Capítulo ${chapters.length + 1}`;
+    if (body.innerHTML.trim()) chapters.push({ title, html: body.innerHTML });
+  }
+  if (!chapters.length) throw new Error('El EPUB no contiene capítulos de lectura.');
+  return chapters;
+};
+
 export default function ReaderModal({ book, onClose }) {
   const url = book.archivo_pdf || book.pdf || '';
   const isEpub = useMemo(() => {
     try { return new URL(url, window.location.href).pathname.toLowerCase().endsWith('.epub'); }
     catch { return false; }
   }, [url]);
-  const epubHost = useRef(null);
-  const epubBook = useRef(null);
-  const rendition = useRef(null);
+  const epubContent = useRef(null);
   const pdfFrame = useRef(0);
   const pdfScrollTimer = useRef(0);
   const pdfPruneTimer = useRef(0);
@@ -44,6 +109,7 @@ export default function ReaderModal({ book, onClose }) {
   const [menuPoint, setMenuPoint] = useState(null);
   const [error, setError] = useState('');
   const [epubLoading, setEpubLoading] = useState(true);
+  const [epubChapters, setEpubChapters] = useState([]);
   const colors = themes[theme];
   const pdfPageWidth = readingMode === 'horizontal'
     ? Math.max(280, Math.min(760, window.innerHeight * .68 * .707, window.innerWidth - 20))
@@ -52,106 +118,55 @@ export default function ReaderModal({ book, onClose }) {
   useEffect(() => { readingModeRef.current = readingMode; }, [readingMode]);
 
   useEffect(() => {
-    if (!isEpub || !epubHost.current) return undefined;
+    if (!isEpub || epubLoading || !epubContent.current) return undefined;
+    const container = epubContent.current;
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const horizontal = readingMode === 'horizontal';
+        const extent = horizontal ? container.clientWidth : container.clientHeight;
+        const length = horizontal ? container.scrollWidth : container.scrollHeight;
+        const total = Math.max(1, Math.ceil(length / Math.max(extent, 1)));
+        setPages(total);
+        setPage(Math.min(total, Math.max(1, Math.floor((horizontal ? container.scrollLeft : container.scrollTop) / Math.max(extent, 1)) + 1)));
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => { observer.disconnect(); window.cancelAnimationFrame(frame); };
+  }, [isEpub, epubLoading, epubChapters, readingMode, font, fontSize]);
+
+  useEffect(() => {
+    if (!isEpub || !epubContent.current) return undefined;
     let disposed = false;
     setEpubLoading(true);
     setError('');
     const controller = new AbortController();
-    let reader;
-    let display;
-    const loadTimeout = window.setTimeout(() => controller.abort(), 20000);
-    let renderTimeout;
-    let renderDeadline;
     const initialize = async () => {
       try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Supabase respondió con HTTP ${response.status} al descargar el EPUB.`);
-        const archive = await response.arrayBuffer();
+        const chapters = await readEpub(url, controller.signal);
         if (disposed) return;
-        renderDeadline = new Promise((_, reject) => {
-          renderTimeout = window.setTimeout(() => reject(new Error('El EPUB tardó demasiado en preparar sus capítulos. Volvé a intentarlo o abrí el archivo directamente.')), 30000);
-        });
-        // epubjs returns a Promise<Book> when opening an ArrayBuffer. Let the
-        // package open without waiting for every optional resource in `ready`:
-        // some EPUBs keep that aggregate promise pending even when chapters
-        // themselves are readable.
-        reader = await ePub(archive, {});
-        epubBook.current = reader;
-        display = reader.renderTo(epubHost.current, {
-          width: '100%',
-          height: '100%',
-          spread: 'none',
-          flow: readingMode === 'vertical' ? 'scrolled-doc' : 'paginated',
-          // The default manager supports scrolled-doc and avoids the continuous
-          // manager's all-spine preloading, which can stall on some EPUBs.
-          manager: ePub.ViewManagers.default,
-        });
-        rendition.current = display;
-        display.themes.default({
-          body: { color: colors.color, background: colors.background, 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
-          '*': { 'font-family': `${font} !important` },
-          p: { 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
-        });
-        display.on('relocated', (location) => setPage(location?.start?.displayed?.page || 1));
-        display.on('selected', (cfiRange, contents) => {
-          const text = contents?.window?.getSelection()?.toString()?.trim() || '';
-          if (text) { setSelection(text); setMenuPoint({ x: 24, y: 88 }); }
-          display.annotations.highlight(cfiRange, {}, () => {});
-        });
-        display.on('rendered', () => { if (!disposed) setEpubLoading(false); });
-        display.on('displayerror', (err) => {
-          if (!disposed) {
-            setError(err?.message || 'EPUB.js no pudo mostrar el primer capítulo.');
-            setEpubLoading(false);
-          }
-        });
-        await Promise.race([display.display(), renderDeadline]);
-        if (!disposed) setEpubLoading(false);
+        setEpubChapters(chapters);
+        setPages(chapters.length);
+        setPage(1);
+        setEpubLoading(false);
       } catch (err) {
-        if (!disposed) {
-          const timedOut = err?.name === 'AbortError';
-          setError(timedOut ? 'La descarga del EPUB tardó más de 20 segundos. Revisá la conexión o el archivo en Supabase.' : err?.message || 'No se pudo inicializar el lector EPUB.');
+        if (!disposed && err.name !== 'AbortError') {
+          setError(err?.message || 'No se pudo inicializar el lector EPUB.');
           setEpubLoading(false);
         }
-      } finally {
-        window.clearTimeout(loadTimeout);
-        window.clearTimeout(renderTimeout);
       }
     };
     initialize();
     return () => {
       disposed = true;
       controller.abort();
-      window.clearTimeout(loadTimeout);
-      window.clearTimeout(renderTimeout);
-      if (reader) reader.destroy();
-      else display?.destroy();
-      rendition.current = null;
-      epubBook.current = null;
     };
   }, [url, isEpub]);
 
-  const changeReadingMode = (mode) => {
-    if (isEpub && rendition.current) {
-      // Change the EPUB.js manager only in response to an explicit user action.
-      // Reapplying flow on initial mount can race with the first display() and
-      // leave the iframe with a zero-sized viewport in some browsers.
-      rendition.current.flow(mode === 'vertical' ? 'scrolled-doc' : 'paginated');
-    }
-    setReadingMode(mode);
-  };
-
-  useEffect(() => {
-    if (!isEpub || !rendition.current) return;
-    rendition.current.themes.default({
-      body: { color: colors.color, background: colors.background, 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
-      '*': { 'font-family': `${font} !important` },
-      p: { 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
-    });
-    rendition.current.themes.fontSize(`${fontSize}px`);
-    rendition.current.themes.override('background', colors.background, true);
-    rendition.current.themes.override('color', colors.color, true);
-  }, [isEpub, font, fontSize, colors]);
+  const changeReadingMode = (mode) => setReadingMode(mode);
 
   const saveReaderNote = async (type) => {
     const content = selection.trim();
@@ -178,7 +193,12 @@ export default function ReaderModal({ book, onClose }) {
     window.getSelection()?.removeAllRanges();
   };
   const copy = async () => { await navigator.clipboard?.writeText(selection); setMenuPoint(null); };
-  const changePage = (direction) => rendition.current?.[direction > 0 ? 'next' : 'prev']();
+  const changePage = (direction) => {
+    const container = epubContent.current;
+    if (!container) return;
+    const horizontal = readingModeRef.current === 'horizontal';
+    container.scrollBy({ [horizontal ? 'left' : 'top']: direction * (horizontal ? container.clientWidth : container.clientHeight) * .88, behavior: 'smooth' });
+  };
   const handlePdfScroll = (event) => {
     const container = event.currentTarget;
     if (pdfFrame.current) return;
@@ -265,7 +285,21 @@ export default function ReaderModal({ book, onClose }) {
           if (text) { setSelection(text); setMenuPoint({ x: event.clientX, y: event.clientY }); }
         }, 0);
       }}>
-        {error ? <div className="reader-error"><strong>No se pudo abrir el libro</strong><p>{error}</p><a href={url} target="_blank" rel="noreferrer">Intentar abrir el archivo</a></div> : isEpub ? <><div className="epub-stage" ref={epubHost} />{epubLoading && <p className="reader-loading epub-loading">Cargando EPUB…</p>}</> : <Document file={url} onLoadSuccess={loadPdf} onLoadError={(err) => setError(err.message)} loading={<p className="reader-loading">Cargando libro…</p>}>
+        {error ? <div className="reader-error"><strong>No se pudo abrir el libro</strong><p>{error}</p><a href={url} target="_blank" rel="noreferrer">Intentar abrir el archivo</a></div> : isEpub ? <><div
+          className={`epub-stage epub-flow epub-flow-${readingMode}`}
+          ref={epubContent}
+          style={{ '--epub-font': font, '--epub-font-size': `${fontSize}px` }}
+          onScroll={(event) => {
+            const node = event.currentTarget;
+            const horizontal = readingMode === 'horizontal';
+            const extent = horizontal ? node.clientWidth : node.clientHeight;
+            const offset = horizontal ? node.scrollLeft : node.scrollTop;
+            const length = horizontal ? node.scrollWidth : node.scrollHeight;
+            const total = Math.max(1, Math.ceil(length / Math.max(extent, 1)));
+            setPages(total);
+            setPage(Math.min(total, Math.max(1, Math.floor(offset / Math.max(extent, 1)) + 1)));
+          }}
+        >{epubChapters.map((chapter, index) => <article className="epub-chapter" key={`${chapter.title}-${index}`} dangerouslySetInnerHTML={{ __html: chapter.html }} />)}</div>{epubLoading && <p className="reader-loading epub-loading">Cargando EPUB…</p>}</> : <Document file={url} onLoadSuccess={loadPdf} onLoadError={(err) => setError(err.message)} loading={<p className="reader-loading">Cargando libro…</p>}>
           <div ref={pdfContainer} className={`pdf-pages ${readingMode === 'horizontal' ? 'pdf-horizontal' : 'pdf-vertical'}`} style={{ filter: colors.filter }} onScroll={handlePdfScroll}>
             {Array.from({ length: pages }, (_, index) => {
               const pageNumber = index + 1;
