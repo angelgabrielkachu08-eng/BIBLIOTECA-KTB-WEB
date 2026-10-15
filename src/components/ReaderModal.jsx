@@ -25,7 +25,9 @@ export default function ReaderModal({ book, onClose }) {
   const epubHost = useRef(null);
   const epubBook = useRef(null);
   const rendition = useRef(null);
-  const pdfScrollTimer = useRef(0);
+  const pdfFrame = useRef(0);
+  const pdfRatioRef = useRef(1.414);
+  const pdfContainer = useRef(null);
   const [theme, setTheme] = useState('Día');
   const [font, setFont] = useState('Georgia');
   const [fontSize, setFontSize] = useState(18);
@@ -33,6 +35,7 @@ export default function ReaderModal({ book, onClose }) {
   const readingModeRef = useRef(readingMode);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
+  const [pdfPageRatio, setPdfPageRatio] = useState(1.414);
   const [selection, setSelection] = useState('');
   const [menuPoint, setMenuPoint] = useState(null);
   const [error, setError] = useState('');
@@ -47,9 +50,11 @@ export default function ReaderModal({ book, onClose }) {
   useEffect(() => {
     if (!isEpub || !epubHost.current) return undefined;
     let disposed = false;
+    setEpubLoading(true);
+    setError('');
     const reader = ePub(url);
     epubBook.current = reader;
-    const display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: 'scrolled' });
+    const display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: readingMode === 'vertical' ? 'scrolled' : 'paginated', manager: readingMode === 'vertical' ? 'continuous' : undefined });
     rendition.current = display;
     display.themes.default({
       body: { color: colors.color, background: colors.background, 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
@@ -64,13 +69,19 @@ export default function ReaderModal({ book, onClose }) {
     });
     display.on('rendered', (_section, view) => {
       if (!disposed) setEpubLoading(false);
-      const doc = view?.contents?.document || view?.document;
-      if (!doc) return;
     });
+    const loadTimeout = window.setTimeout(() => {
+      if (!disposed) {
+        setEpubLoading(false);
+        setError('El archivo EPUB no respondió a tiempo. Revisá que el enlace del libro apunte a un EPUB válido y público en Supabase.');
+      }
+    }, 20000);
+    display.on('rendered', () => window.clearTimeout(loadTimeout));
     reader.ready.catch((err) => { if (!disposed) { setError(err?.message || 'No se pudo descargar el EPUB.'); setEpubLoading(false); } });
     display.display().catch((err) => { if (!disposed) { setError(err?.message || 'No se pudo mostrar el EPUB.'); setEpubLoading(false); } });
     return () => {
       disposed = true;
+      window.clearTimeout(loadTimeout);
       display.destroy();
       reader.destroy();
       rendition.current = null;
@@ -78,10 +89,16 @@ export default function ReaderModal({ book, onClose }) {
     };
   }, [url, isEpub]);
 
-  useEffect(() => {
-    if (!isEpub || !rendition.current) return;
-    rendition.current.flow(readingMode === 'vertical' ? 'scrolled' : 'paginated');
-  }, [isEpub, readingMode]);
+  const changeReadingMode = (mode) => {
+    if (isEpub && rendition.current) {
+      // Change the EPUB.js manager only in response to an explicit user action.
+      // Reapplying flow on initial mount can race with the first display() and
+      // leave the iframe with a zero-sized viewport in some browsers.
+      rendition.current.flow(mode === 'vertical' ? 'scrolled' : 'paginated');
+      rendition.current.resize('100%', '100%');
+    }
+    setReadingMode(mode);
+  };
 
   useEffect(() => {
     if (!isEpub || !rendition.current) return;
@@ -123,25 +140,47 @@ export default function ReaderModal({ book, onClose }) {
   const changePage = (direction) => rendition.current?.[direction > 0 ? 'next' : 'prev']();
   const handlePdfScroll = (event) => {
     const container = event.currentTarget;
-    if (pdfScrollTimer.current) return;
-    pdfScrollTimer.current = window.setTimeout(() => {
-      pdfScrollTimer.current = 0;
+    if (pdfFrame.current) return;
+    pdfFrame.current = window.requestAnimationFrame(() => {
+      pdfFrame.current = 0;
       const horizontal = readingModeRef.current === 'horizontal';
-      const center = horizontal ? container.scrollLeft + container.clientWidth / 2 : container.scrollTop + container.clientHeight / 2;
-      const pageNodes = container.querySelectorAll('[data-pdf-page]');
-      let closest = 1;
-      let distance = Infinity;
-      pageNodes.forEach((node, index) => {
-        const start = horizontal ? node.offsetLeft : node.offsetTop;
-        const extent = horizontal ? node.offsetWidth : node.offsetHeight;
-        const delta = Math.abs(start + extent / 2 - center);
-        if (delta < distance) { closest = index + 1; distance = delta; }
-      });
+      const gap = window.innerWidth < 700 ? 8 : 12;
+      const pageExtent = horizontal ? pdfPageWidth + gap : pdfPageWidth * pdfRatioRef.current + gap;
+      const offset = horizontal
+        ? container.scrollLeft + container.clientWidth / 2
+        : container.scrollTop + container.clientHeight / 2;
+      const closest = Math.max(1, Math.min(pages || 1, Math.floor(offset / pageExtent) + 1));
       setPage((current) => current === closest ? current : closest);
-    }, 80);
+    });
   };
 
-  useEffect(() => () => window.clearTimeout(pdfScrollTimer.current), []);
+  useEffect(() => () => window.cancelAnimationFrame(pdfFrame.current), []);
+  useEffect(() => {
+    if (isEpub || !pdfContainer.current) return;
+    pdfContainer.current.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    setPage(1);
+  }, [isEpub, readingMode]);
+
+  const loadPdf = async (pdf) => {
+    try {
+      const firstPage = await pdf.getPage(1);
+      const viewport = firstPage.getViewport({ scale: 1 });
+      const ratio = viewport.height / viewport.width;
+      if (Number.isFinite(ratio) && ratio > 0) {
+        pdfRatioRef.current = ratio;
+        setPdfPageRatio(ratio);
+      }
+    } catch { /* Keep the standard page ratio when metadata cannot be read. */ }
+    setPages(pdf.numPages);
+    setPage(1);
+  };
+
+  const pdfPageRange = useMemo(() => {
+    if (!pages) return [];
+    const first = Math.max(1, page - 2);
+    const last = Math.min(pages, page + 2);
+    return Array.from({ length: last - first + 1 }, (_, index) => first + index);
+  }, [page, pages]);
 
   return <div className="reader-backdrop" role="dialog" aria-modal="true" aria-label={`Lector de ${book.titulo}`} onMouseDown={onClose}>
     <section className="reader-shell" onMouseDown={(event) => event.stopPropagation()}>
@@ -154,7 +193,7 @@ export default function ReaderModal({ book, onClose }) {
         <span>{isEpub ? page : `${page}${pages ? ` / ${pages}` : ''}`}</span>
         {isEpub && <button onClick={() => changePage(1)} title="Página siguiente"><ChevronRight /></button>}
         <label title="Fondo de lectura"><span>Fondo</span><select value={theme} onChange={(event) => setTheme(event.target.value)}>{Object.keys(themes).map((name) => <option key={name}>{name}</option>)}</select></label>
-        <label title="Forma de lectura"><span>Desplazamiento</span><select value={readingMode} onChange={(event) => setReadingMode(event.target.value)}><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
+        <label title="Forma de lectura"><span>Desplazamiento</span><select value={readingMode} onChange={(event) => changeReadingMode(event.target.value)}><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
         {isEpub ? <>
           <label title="Tipografía"><Type size={16} /><select value={font} onChange={(event) => setFont(event.target.value)}>{['Georgia','Arial','Roboto','Verdana','serif','sans-serif'].map((name) => <option key={name}>{name}</option>)}</select></label>
           <button onClick={() => setFontSize((value) => Math.max(14, value - 1))} title="Reducir letra"><Minus /></button><span>{fontSize}px</span><button onClick={() => setFontSize((value) => Math.min(34, value + 1))} title="Aumentar letra"><Plus /></button>
@@ -171,9 +210,15 @@ export default function ReaderModal({ book, onClose }) {
           if (text) { setSelection(text); setMenuPoint({ x: event.clientX, y: event.clientY }); }
         }, 0);
       }}>
-        {error ? <div className="reader-error"><strong>No se pudo abrir el libro</strong><p>{error}</p><a href={url} target="_blank" rel="noreferrer">Intentar abrir el archivo</a></div> : isEpub ? <><div className="epub-stage" ref={epubHost} />{epubLoading && <p className="reader-loading epub-loading">Cargando EPUB…</p>}</> : <Document file={url} onLoadSuccess={({ numPages }) => { setPages(numPages); setPage(1); }} onLoadError={(err) => setError(err.message)} loading={<p className="reader-loading">Cargando libro…</p>}>
-          <div className={`pdf-pages ${readingMode === 'horizontal' ? 'pdf-horizontal' : 'pdf-vertical'}`} style={{ filter: colors.filter }} onScroll={handlePdfScroll}>
-            {Array.from({ length: pages }, (_, index) => <LazyPdfPage key={index + 1} pageNumber={index + 1} width={pdfPageWidth} />)}
+        {error ? <div className="reader-error"><strong>No se pudo abrir el libro</strong><p>{error}</p><a href={url} target="_blank" rel="noreferrer">Intentar abrir el archivo</a></div> : isEpub ? <><div className="epub-stage" ref={epubHost} />{epubLoading && <p className="reader-loading epub-loading">Cargando EPUB…</p>}</> : <Document file={url} onLoadSuccess={loadPdf} onLoadError={(err) => setError(err.message)} loading={<p className="reader-loading">Cargando libro…</p>}>
+          <div ref={pdfContainer} className={`pdf-pages ${readingMode === 'horizontal' ? 'pdf-horizontal' : 'pdf-vertical'}`} style={{ filter: colors.filter }} onScroll={handlePdfScroll}>
+            {Array.from({ length: pages }, (_, index) => {
+              const pageNumber = index + 1;
+              const isNearViewport = pdfPageRange.includes(pageNumber);
+              return <div key={pageNumber} className="pdf-page" data-pdf-page style={{ width: pdfPageWidth, height: pdfPageWidth * pdfPageRatio }}>
+                {isNearViewport && <Page pageNumber={pageNumber} width={pdfPageWidth} renderTextLayer renderAnnotationLayer />}
+              </div>;
+            })}
           </div>
         </Document>}
         {menuPoint && selection && <div className="reader-selection-menu" style={{ left: Math.max(8, Math.min(menuPoint.x, window.innerWidth - 436)), top: Math.max(8, Math.min(menuPoint.y, window.innerHeight - 130)) }}>
@@ -185,17 +230,3 @@ export default function ReaderModal({ book, onClose }) {
   </div>;
 }
 
-function LazyPdfPage({ pageNumber, width }) {
-  const pageRef = useRef(null);
-  const [visible, setVisible] = useState(pageNumber <= 2);
-  useEffect(() => {
-    const node = pageRef.current;
-    if (!node || typeof IntersectionObserver === 'undefined') { setVisible(true); return undefined; }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) { setVisible(true); observer.disconnect(); }
-    }, { rootMargin: '900px' });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-  return <div ref={pageRef} className="pdf-page" data-pdf-page><div className="pdf-page-placeholder" style={{ width, height: width * 1.42 }}>{visible && <Page pageNumber={pageNumber} width={width} renderTextLayer renderAnnotationLayer />}</div></div>;
-}

@@ -24,3 +24,21 @@
 .epub-stage iframe{display:block;border:0;}
 .epub-loading{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;background:color-mix(in srgb,var(--reader-background) 88%,transparent);}
 .reader-error a{color:#9b263f;font-weight:700;}
+/* Immersive reader: use the full browser viewport instead of a floating window. */
+.reader-backdrop{display:block;padding:0;background:#fbfaf6;}
+.reader-shell{width:100vw;height:100vh;height:100dvh;max-height:none;border:0;box-shadow:none;}
+.reader-head{padding-top:max(0px,env(safe-area-inset-top));}
+.reader-content{overscroll-behavior:contain;}
+.reader-content.epub-vertical{touch-action:pan-y;}
+.reader-content.epub-horizontal{touch-action:pan-x;}
+.epub-stage{overflow:visible;}
+.epub-stage iframe{width:auto;height:auto;touch-action:inherit;}
+.pdf-content{display:flex;flex-direction:column;min-height:0;}
+.reader-content>.react-pdf__Document{flex:1;min-height:0;}
+.pdf-pages{scrollbar-gutter:stable;}
+.pdf-vertical{align-items:center;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;}
+.pdf-horizontal{align-items:center;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;touch-action:pan-x;-webkit-overflow-scrolling:touch;}
+.pdf-page{position:relative;flex:none;overflow:hidden;}
+.pdf-page canvas{display:block;}
+.reader-error{max-width:720px;margin:48px auto;padding:24px;background:#fff;border:1px solid #c8a86c;border-radius:10px;}
+@media(max-width:700px){.reader-head{padding-left:14px;padding-right:14px}.reader-tools{min-height:52px;padding:7px 10px;gap:7px}.reader-foot{padding-bottom:max(5px,env(safe-area-inset-bottom));}.pdf-page{box-shadow:0 3px 12px #0003;}}
