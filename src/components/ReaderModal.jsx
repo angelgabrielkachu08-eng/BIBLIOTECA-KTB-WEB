@@ -27,6 +27,7 @@ export default function ReaderModal({ book, onClose }) {
   const rendition = useRef(null);
   const pdfFrame = useRef(0);
   const pdfScrollTimer = useRef(0);
+  const pdfPruneTimer = useRef(0);
   const pdfLastPageUpdate = useRef(0);
   const pdfRatioRef = useRef(1.414);
   const pdfContainer = useRef(null);
@@ -37,6 +38,7 @@ export default function ReaderModal({ book, onClose }) {
   const readingModeRef = useRef(readingMode);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
+  const [renderedPages, setRenderedPages] = useState(() => new Set([1, 2, 3, 4, 5, 6]));
   const [pdfPageRatio, setPdfPageRatio] = useState(1.414);
   const [selection, setSelection] = useState('');
   const [menuPoint, setMenuPoint] = useState(null);
@@ -69,7 +71,15 @@ export default function ReaderModal({ book, onClose }) {
         // open() and attaches renderTo() to the resolved Book.
         reader = await ePub(archive, {});
         epubBook.current = reader;
-        display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: readingMode === 'vertical' ? 'scrolled' : 'paginated', manager: 'continuous' });
+        display = reader.renderTo(epubHost.current, {
+          width: '100%',
+          height: '100%',
+          spread: 'none',
+          flow: readingMode === 'vertical' ? 'scrolled' : 'paginated',
+          // Pass the registered class instead of its name. Rendition's string
+          // lookup uses an internal parser class that has no manager registry.
+          manager: ePub.ViewManagers.continuous,
+        });
         rendition.current = display;
         display.themes.default({
           body: { color: colors.color, background: colors.background, 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
@@ -164,14 +174,26 @@ export default function ReaderModal({ book, onClose }) {
       const updatePage = () => {
         pdfScrollTimer.current = 0;
         pdfLastPageUpdate.current = performance.now();
-      const horizontal = readingModeRef.current === 'horizontal';
-      const gap = window.innerWidth < 700 ? 8 : 12;
-      const pageExtent = horizontal ? pdfPageWidth + gap : pdfPageWidth * pdfRatioRef.current + gap;
-      const offset = horizontal
-        ? container.scrollLeft + container.clientWidth / 2
-        : container.scrollTop + container.clientHeight / 2;
-      const closest = Math.max(1, Math.min(pages || 1, Math.floor(offset / pageExtent) + 1));
-      setPage((current) => current === closest ? current : closest);
+        const horizontal = readingModeRef.current === 'horizontal';
+        const gap = window.innerWidth < 700 ? 8 : 12;
+        const pageExtent = horizontal ? pdfPageWidth + gap : pdfPageWidth * pdfRatioRef.current + gap;
+        const offset = horizontal
+          ? container.scrollLeft + container.clientWidth / 2
+          : container.scrollTop + container.clientHeight / 2;
+        const closest = Math.max(1, Math.min(pages || 1, Math.floor(offset / pageExtent) + 1));
+        setPage((current) => current === closest ? current : closest);
+        setRenderedPages((current) => {
+          const next = new Set(current);
+          for (let number = Math.max(1, closest - 4); number <= Math.min(pages || 1, closest + 9); number += 1) next.add(number);
+          return next.size === current.size ? current : next;
+        });
+        window.clearTimeout(pdfPruneTimer.current);
+        pdfPruneTimer.current = window.setTimeout(() => {
+          setRenderedPages((current) => {
+            const next = new Set([...current].filter((number) => number >= Math.max(1, closest - 4) && number <= Math.min(pages || 1, closest + 9)));
+            return next.size === current.size ? current : next;
+          });
+        }, 1000);
       };
       const wait = 100 - (performance.now() - pdfLastPageUpdate.current);
       if (wait <= 0) updatePage();
@@ -179,11 +201,12 @@ export default function ReaderModal({ book, onClose }) {
     });
   };
 
-  useEffect(() => () => { window.cancelAnimationFrame(pdfFrame.current); window.clearTimeout(pdfScrollTimer.current); }, []);
+  useEffect(() => () => { window.cancelAnimationFrame(pdfFrame.current); window.clearTimeout(pdfScrollTimer.current); window.clearTimeout(pdfPruneTimer.current); }, []);
   useEffect(() => {
     if (isEpub || !pdfContainer.current) return;
     pdfContainer.current.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     setPage(1);
+    setRenderedPages(new Set([1, 2, 3, 4, 5, 6]));
   }, [isEpub, readingMode]);
 
   const loadPdf = async (pdf) => {
@@ -198,14 +221,8 @@ export default function ReaderModal({ book, onClose }) {
     } catch { /* Keep the standard page ratio when metadata cannot be read. */ }
     setPages(pdf.numPages);
     setPage(1);
+    setRenderedPages(new Set(Array.from({ length: Math.min(pdf.numPages, 6) }, (_, index) => index + 1)));
   };
-
-  const pdfPageRange = useMemo(() => {
-    if (!pages) return [];
-    const first = Math.max(1, page - 2);
-    const last = Math.min(pages, page + 5);
-    return Array.from({ length: last - first + 1 }, (_, index) => first + index);
-  }, [page, pages]);
 
   return <div className="reader-backdrop" role="dialog" aria-modal="true" aria-label={`Lector de ${book.titulo}`} onMouseDown={onClose}>
     <section className="reader-shell" onMouseDown={(event) => event.stopPropagation()}>
@@ -239,7 +256,7 @@ export default function ReaderModal({ book, onClose }) {
           <div ref={pdfContainer} className={`pdf-pages ${readingMode === 'horizontal' ? 'pdf-horizontal' : 'pdf-vertical'}`} style={{ filter: colors.filter }} onScroll={handlePdfScroll}>
             {Array.from({ length: pages }, (_, index) => {
               const pageNumber = index + 1;
-              const isNearViewport = pdfPageRange.includes(pageNumber);
+              const isNearViewport = renderedPages.has(pageNumber);
               return <div key={pageNumber} className="pdf-page" data-pdf-page style={{ width: pdfPageWidth, height: pdfPageWidth * pdfPageRatio }}>
                 {isNearViewport && <Page pageNumber={pageNumber} width={pdfPageWidth} renderTextLayer renderAnnotationLayer onRenderError={(err) => setError(err?.message || `No se pudo dibujar la página ${pageNumber}.`)} />}
               </div>;
