@@ -27,6 +27,7 @@ export default function ReaderModal({ book, onClose }) {
   const rendition = useRef(null);
   const pdfFrame = useRef(0);
   const pdfScrollTimer = useRef(0);
+  const pdfLastPageUpdate = useRef(0);
   const pdfRatioRef = useRef(1.414);
   const pdfContainer = useRef(null);
   const [theme, setTheme] = useState('Día');
@@ -63,7 +64,10 @@ export default function ReaderModal({ book, onClose }) {
         if (!response.ok) throw new Error(`Supabase respondió con HTTP ${response.status} al descargar el EPUB.`);
         const archive = await response.arrayBuffer();
         if (disposed) return;
-        reader = ePub(archive);
+        // epubjs 0.3.x returns a Promise<Book> when opening a source. Pass the
+        // binary source with an options argument so its factory performs
+        // open() and attaches renderTo() to the resolved Book.
+        reader = await ePub(archive, {});
         epubBook.current = reader;
         display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: readingMode === 'vertical' ? 'scrolled' : 'paginated', manager: 'continuous' });
         rendition.current = display;
@@ -97,8 +101,8 @@ export default function ReaderModal({ book, onClose }) {
       disposed = true;
       controller.abort();
       window.clearTimeout(loadTimeout);
-      display?.destroy();
-      reader?.destroy();
+      if (reader) reader.destroy();
+      else display?.destroy();
       rendition.current = null;
       epubBook.current = null;
     };
@@ -154,11 +158,12 @@ export default function ReaderModal({ book, onClose }) {
   const changePage = (direction) => rendition.current?.[direction > 0 ? 'next' : 'prev']();
   const handlePdfScroll = (event) => {
     const container = event.currentTarget;
-    window.clearTimeout(pdfScrollTimer.current);
-    if (pdfFrame.current) window.cancelAnimationFrame(pdfFrame.current);
+    if (pdfFrame.current) return;
     pdfFrame.current = window.requestAnimationFrame(() => {
       pdfFrame.current = 0;
-      pdfScrollTimer.current = window.setTimeout(() => {
+      const updatePage = () => {
+        pdfScrollTimer.current = 0;
+        pdfLastPageUpdate.current = performance.now();
       const horizontal = readingModeRef.current === 'horizontal';
       const gap = window.innerWidth < 700 ? 8 : 12;
       const pageExtent = horizontal ? pdfPageWidth + gap : pdfPageWidth * pdfRatioRef.current + gap;
@@ -167,7 +172,10 @@ export default function ReaderModal({ book, onClose }) {
         : container.scrollTop + container.clientHeight / 2;
       const closest = Math.max(1, Math.min(pages || 1, Math.floor(offset / pageExtent) + 1));
       setPage((current) => current === closest ? current : closest);
-      }, 100);
+      };
+      const wait = 100 - (performance.now() - pdfLastPageUpdate.current);
+      if (wait <= 0) updatePage();
+      else if (!pdfScrollTimer.current) pdfScrollTimer.current = window.setTimeout(updatePage, wait);
     });
   };
 
@@ -195,7 +203,7 @@ export default function ReaderModal({ book, onClose }) {
   const pdfPageRange = useMemo(() => {
     if (!pages) return [];
     const first = Math.max(1, page - 2);
-    const last = Math.min(pages, page + 2);
+    const last = Math.min(pages, page + 5);
     return Array.from({ length: last - first + 1 }, (_, index) => first + index);
   }, [page, pages]);
 
