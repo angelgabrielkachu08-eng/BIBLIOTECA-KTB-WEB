@@ -36,6 +36,7 @@ export default function ReaderModal({ book, onClose }) {
   const [selection, setSelection] = useState('');
   const [menuPoint, setMenuPoint] = useState(null);
   const [error, setError] = useState('');
+  const [epubLoading, setEpubLoading] = useState(true);
   const colors = themes[theme];
   const pdfPageWidth = readingMode === 'horizontal'
     ? Math.max(280, Math.min(760, window.innerHeight * .68 * .707, window.innerWidth - 20))
@@ -50,7 +51,6 @@ export default function ReaderModal({ book, onClose }) {
     epubBook.current = reader;
     const display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: 'scrolled' });
     rendition.current = display;
-    const gestureCleanup = [];
     display.themes.default({
       body: { color: colors.color, background: colors.background, 'font-family': `${font} !important`, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
       '*': { 'font-family': `${font} !important` },
@@ -63,32 +63,14 @@ export default function ReaderModal({ book, onClose }) {
       display.annotations.highlight(cfiRange, {}, () => {});
     });
     display.on('rendered', (_section, view) => {
+      if (!disposed) setEpubLoading(false);
       const doc = view?.contents?.document || view?.document;
       if (!doc) return;
-      const touchAction = readingModeRef.current === 'horizontal' ? 'pan-x' : 'pan-y';
-      if (doc.documentElement) doc.documentElement.style.touchAction = touchAction;
-      if (doc.body) doc.body.style.touchAction = touchAction;
-      let startX = null;
-      const onTouchStart = (event) => { startX = event.changedTouches?.[0]?.clientX ?? null; };
-      const onTouchEnd = (event) => {
-        const endX = event.changedTouches?.[0]?.clientX;
-        if (startX == null || endX == null || readingModeRef.current !== 'horizontal' || doc.getSelection()?.toString()) return;
-        const delta = endX - startX;
-        if (Math.abs(delta) > 32) display[delta < 0 ? 'next' : 'prev']();
-        startX = null;
-      };
-      doc.addEventListener('touchstart', onTouchStart, { passive: true });
-      doc.addEventListener('touchend', onTouchEnd, { passive: true });
-      gestureCleanup.push(() => {
-        doc.removeEventListener('touchstart', onTouchStart);
-        doc.removeEventListener('touchend', onTouchEnd);
-      });
     });
-    reader.ready.catch((err) => { if (!disposed) setError(err?.message || 'No se pudo abrir el EPUB.'); });
-    display.display().catch((err) => { if (!disposed) setError(err?.message || 'No se pudo mostrar el EPUB.'); });
+    reader.ready.catch((err) => { if (!disposed) { setError(err?.message || 'No se pudo descargar el EPUB.'); setEpubLoading(false); } });
+    display.display().catch((err) => { if (!disposed) { setError(err?.message || 'No se pudo mostrar el EPUB.'); setEpubLoading(false); } });
     return () => {
       disposed = true;
-      gestureCleanup.forEach((remove) => remove());
       display.destroy();
       reader.destroy();
       rendition.current = null;
@@ -99,11 +81,6 @@ export default function ReaderModal({ book, onClose }) {
   useEffect(() => {
     if (!isEpub || !rendition.current) return;
     rendition.current.flow(readingMode === 'vertical' ? 'scrolled' : 'paginated');
-    const touchAction = readingMode === 'horizontal' ? 'pan-x' : 'pan-y';
-    rendition.current.getContents().forEach((contents) => {
-      if (contents.document?.documentElement) contents.document.documentElement.style.touchAction = touchAction;
-      if (contents.document?.body) contents.document.body.style.touchAction = touchAction;
-    });
   }, [isEpub, readingMode]);
 
   useEffect(() => {
@@ -194,7 +171,7 @@ export default function ReaderModal({ book, onClose }) {
           if (text) { setSelection(text); setMenuPoint({ x: event.clientX, y: event.clientY }); }
         }, 0);
       }}>
-        {error ? <p className="reader-error">{error}</p> : isEpub ? <div className="epub-stage" ref={epubHost} /> : <Document file={url} onLoadSuccess={({ numPages }) => { setPages(numPages); setPage(1); }} onLoadError={(err) => setError(err.message)} loading={<p className="reader-loading">Cargando libro…</p>}>
+        {error ? <div className="reader-error"><strong>No se pudo abrir el libro</strong><p>{error}</p><a href={url} target="_blank" rel="noreferrer">Intentar abrir el archivo</a></div> : isEpub ? <><div className="epub-stage" ref={epubHost} />{epubLoading && <p className="reader-loading epub-loading">Cargando EPUB…</p>}</> : <Document file={url} onLoadSuccess={({ numPages }) => { setPages(numPages); setPage(1); }} onLoadError={(err) => setError(err.message)} loading={<p className="reader-loading">Cargando libro…</p>}>
           <div className={`pdf-pages ${readingMode === 'horizontal' ? 'pdf-horizontal' : 'pdf-vertical'}`} style={{ filter: colors.filter }} onScroll={handlePdfScroll}>
             {Array.from({ length: pages }, (_, index) => <LazyPdfPage key={index + 1} pageNumber={index + 1} width={pdfPageWidth} />)}
           </div>
