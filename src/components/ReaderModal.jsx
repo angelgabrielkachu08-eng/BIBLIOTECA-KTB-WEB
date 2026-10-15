@@ -25,11 +25,11 @@ export default function ReaderModal({ book, onClose }) {
   const epubHost = useRef(null);
   const epubBook = useRef(null);
   const rendition = useRef(null);
-  const readingModeRef = useRef(readingMode);
   const [theme, setTheme] = useState('Día');
   const [font, setFont] = useState('Georgia');
   const [fontSize, setFontSize] = useState(18);
   const [readingMode, setReadingMode] = useState('vertical');
+  const readingModeRef = useRef(readingMode);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [selection, setSelection] = useState('');
