@@ -71,25 +71,20 @@ export default function ReaderModal({ book, onClose }) {
         renderDeadline = new Promise((_, reject) => {
           renderTimeout = window.setTimeout(() => reject(new Error('El EPUB tardó demasiado en preparar sus capítulos. Volvé a intentarlo o abrí el archivo directamente.')), 30000);
         });
-        // epubjs 0.3.x returns a Promise<Book> when opening a source. Pass the
-        // binary source with an options argument so its factory performs
-        // open() and attaches renderTo() to the resolved Book.
+        // epubjs returns a Promise<Book> when opening an ArrayBuffer. Let the
+        // package open without waiting for every optional resource in `ready`:
+        // some EPUBs keep that aggregate promise pending even when chapters
+        // themselves are readable.
         reader = await ePub(archive, {});
-        // epubjs resolves its book wrapper before all package metadata/spine
-        // promises have necessarily finished. Wait for parsing before the
-        // rendition queues its first display operation.
-        if (reader.ready && typeof reader.ready.then === 'function') {
-          await Promise.race([reader.ready, renderDeadline]);
-        }
         epubBook.current = reader;
         display = reader.renderTo(epubHost.current, {
           width: '100%',
           height: '100%',
           spread: 'none',
-          flow: readingMode === 'vertical' ? 'scrolled' : 'paginated',
-          // Pass the registered class instead of its name. Rendition's string
-          // lookup uses an internal parser class that has no manager registry.
-          manager: ePub.ViewManagers.continuous,
+          flow: readingMode === 'vertical' ? 'scrolled-doc' : 'paginated',
+          // The default manager supports scrolled-doc and avoids the continuous
+          // manager's all-spine preloading, which can stall on some EPUBs.
+          manager: ePub.ViewManagers.default,
         });
         rendition.current = display;
         display.themes.default({
@@ -141,7 +136,7 @@ export default function ReaderModal({ book, onClose }) {
       // Change the EPUB.js manager only in response to an explicit user action.
       // Reapplying flow on initial mount can race with the first display() and
       // leave the iframe with a zero-sized viewport in some browsers.
-      rendition.current.flow(mode === 'vertical' ? 'scrolled' : 'paginated');
+      rendition.current.flow(mode === 'vertical' ? 'scrolled-doc' : 'paginated');
     }
     setReadingMode(mode);
   };
