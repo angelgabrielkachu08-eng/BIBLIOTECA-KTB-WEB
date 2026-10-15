@@ -60,16 +60,27 @@ export default function ReaderModal({ book, onClose }) {
     let reader;
     let display;
     const loadTimeout = window.setTimeout(() => controller.abort(), 20000);
+    let renderTimeout;
+    let renderDeadline;
     const initialize = async () => {
       try {
         const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) throw new Error(`Supabase respondió con HTTP ${response.status} al descargar el EPUB.`);
         const archive = await response.arrayBuffer();
         if (disposed) return;
+        renderDeadline = new Promise((_, reject) => {
+          renderTimeout = window.setTimeout(() => reject(new Error('El EPUB tardó demasiado en preparar sus capítulos. Volvé a intentarlo o abrí el archivo directamente.')), 30000);
+        });
         // epubjs 0.3.x returns a Promise<Book> when opening a source. Pass the
         // binary source with an options argument so its factory performs
         // open() and attaches renderTo() to the resolved Book.
         reader = await ePub(archive, {});
+        // epubjs resolves its book wrapper before all package metadata/spine
+        // promises have necessarily finished. Wait for parsing before the
+        // rendition queues its first display operation.
+        if (reader.ready && typeof reader.ready.then === 'function') {
+          await Promise.race([reader.ready, renderDeadline]);
+        }
         epubBook.current = reader;
         display = reader.renderTo(epubHost.current, {
           width: '100%',
@@ -93,7 +104,13 @@ export default function ReaderModal({ book, onClose }) {
           display.annotations.highlight(cfiRange, {}, () => {});
         });
         display.on('rendered', () => { if (!disposed) setEpubLoading(false); });
-        await display.display();
+        display.on('displayerror', (err) => {
+          if (!disposed) {
+            setError(err?.message || 'EPUB.js no pudo mostrar el primer capítulo.');
+            setEpubLoading(false);
+          }
+        });
+        await Promise.race([display.display(), renderDeadline]);
         if (!disposed) setEpubLoading(false);
       } catch (err) {
         if (!disposed) {
@@ -103,6 +120,7 @@ export default function ReaderModal({ book, onClose }) {
         }
       } finally {
         window.clearTimeout(loadTimeout);
+        window.clearTimeout(renderTimeout);
       }
     };
     initialize();
@@ -110,6 +128,7 @@ export default function ReaderModal({ book, onClose }) {
       disposed = true;
       controller.abort();
       window.clearTimeout(loadTimeout);
+      window.clearTimeout(renderTimeout);
       if (reader) reader.destroy();
       else display?.destroy();
       rendition.current = null;
