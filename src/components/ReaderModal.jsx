@@ -25,6 +25,7 @@ export default function ReaderModal({ book, onClose }) {
   const epubHost = useRef(null);
   const epubBook = useRef(null);
   const rendition = useRef(null);
+  const pdfScrollTimer = useRef(0);
   const [theme, setTheme] = useState('Día');
   const [font, setFont] = useState('Georgia');
   const [fontSize, setFontSize] = useState(18);
@@ -145,19 +146,25 @@ export default function ReaderModal({ book, onClose }) {
   const changePage = (direction) => rendition.current?.[direction > 0 ? 'next' : 'prev']();
   const handlePdfScroll = (event) => {
     const container = event.currentTarget;
-    const horizontal = readingMode === 'horizontal';
-    const center = horizontal ? container.scrollLeft + container.clientWidth / 2 : container.scrollTop + container.clientHeight / 2;
-    const pageNodes = [...container.querySelectorAll('[data-pdf-page]')];
-    let closest = 1;
-    let distance = Infinity;
-    pageNodes.forEach((node, index) => {
-      const start = horizontal ? node.offsetLeft : node.offsetTop;
-      const extent = horizontal ? node.offsetWidth : node.offsetHeight;
-      const delta = Math.abs(start + extent / 2 - center);
-      if (delta < distance) { closest = index + 1; distance = delta; }
-    });
-    setPage((current) => current === closest ? current : closest);
+    if (pdfScrollTimer.current) return;
+    pdfScrollTimer.current = window.setTimeout(() => {
+      pdfScrollTimer.current = 0;
+      const horizontal = readingModeRef.current === 'horizontal';
+      const center = horizontal ? container.scrollLeft + container.clientWidth / 2 : container.scrollTop + container.clientHeight / 2;
+      const pageNodes = container.querySelectorAll('[data-pdf-page]');
+      let closest = 1;
+      let distance = Infinity;
+      pageNodes.forEach((node, index) => {
+        const start = horizontal ? node.offsetLeft : node.offsetTop;
+        const extent = horizontal ? node.offsetWidth : node.offsetHeight;
+        const delta = Math.abs(start + extent / 2 - center);
+        if (delta < distance) { closest = index + 1; distance = delta; }
+      });
+      setPage((current) => current === closest ? current : closest);
+    }, 80);
   };
+
+  useEffect(() => () => window.clearTimeout(pdfScrollTimer.current), []);
 
   return <div className="reader-backdrop" role="dialog" aria-modal="true" aria-label={`Lector de ${book.titulo}`} onMouseDown={onClose}>
     <section className="reader-shell" onMouseDown={(event) => event.stopPropagation()}>
