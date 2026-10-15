@@ -260,3 +260,9 @@ body.modal-open{overflow:hidden;touch-action:none;overscroll-behavior:none}
 html.modal-open{overflow:hidden}
 
 [data-theme="dark"] .hero h2{color:#f0d080!important}
+
+/* Keep the mobile navigation drawer above catalog and loan floating actions. */
+@media (max-width: 760px) {
+  .backdrop { z-index: 1000; }
+  .sidebar { z-index: 1001; }
+}
