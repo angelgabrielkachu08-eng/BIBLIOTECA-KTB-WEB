@@ -93,7 +93,6 @@ export default function ReaderModal({ book, onClose }) {
           display.annotations.highlight(cfiRange, {}, () => {});
         });
         display.on('rendered', () => { if (!disposed) setEpubLoading(false); });
-        reader.ready.catch((err) => { if (!disposed) { setError(err?.message || 'El archivo descargado no tiene una estructura EPUB válida.'); setEpubLoading(false); } });
         await display.display();
         if (!disposed) setEpubLoading(false);
       } catch (err) {
