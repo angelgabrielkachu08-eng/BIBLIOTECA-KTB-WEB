@@ -17,13 +17,17 @@ const themes = {
 
 export default function ReaderModal({ book, onClose }) {
   const url = book.archivo_pdf || book.pdf || '';
-  const isEpub = useMemo(() => new URL(url).pathname.toLowerCase().endsWith('.epub'), [url]);
+  const isEpub = useMemo(() => {
+    try { return new URL(url, window.location.href).pathname.toLowerCase().endsWith('.epub'); }
+    catch { return false; }
+  }, [url]);
   const epubHost = useRef(null);
   const epubBook = useRef(null);
   const rendition = useRef(null);
   const [theme, setTheme] = useState('Día');
   const [font, setFont] = useState('Georgia');
   const [fontSize, setFontSize] = useState(18);
+  const [readingMode, setReadingMode] = useState('vertical');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [selection, setSelection] = useState('');
@@ -36,7 +40,7 @@ export default function ReaderModal({ book, onClose }) {
     let disposed = false;
     const reader = ePub(url);
     epubBook.current = reader;
-    const display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: 'paginated' });
+    const display = reader.renderTo(epubHost.current, { width: '100%', height: '100%', spread: 'none', flow: 'scrolled' });
     rendition.current = display;
     display.themes.default({
       body: { color: colors.color, background: colors.background, 'font-family': font, 'font-size': `${fontSize}px`, 'line-height': '1.65' },
@@ -58,6 +62,11 @@ export default function ReaderModal({ book, onClose }) {
       epubBook.current = null;
     };
   }, [url, isEpub]);
+
+  useEffect(() => {
+    if (!isEpub || !rendition.current) return;
+    rendition.current.flow(readingMode === 'vertical' ? 'scrolled' : 'paginated');
+  }, [isEpub, readingMode]);
 
   useEffect(() => {
     if (!isEpub || !rendition.current) return;
@@ -94,6 +103,7 @@ export default function ReaderModal({ book, onClose }) {
         <button onClick={() => changePage(1)} title="Página siguiente"><ChevronRight /></button>
         <label title="Fondo de lectura"><span>Fondo</span><select value={theme} onChange={(event) => setTheme(event.target.value)}>{Object.keys(themes).map((name) => <option key={name}>{name}</option>)}</select></label>
         {isEpub ? <>
+          <label title="Forma de lectura"><span>Lectura</span><select value={readingMode} onChange={(event) => setReadingMode(event.target.value)}><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
           <label title="Tipografía"><Type size={16} /><select value={font} onChange={(event) => setFont(event.target.value)}>{['Georgia','Arial','Roboto','Verdana','serif','sans-serif'].map((name) => <option key={name}>{name}</option>)}</select></label>
           <button onClick={() => setFontSize((value) => Math.max(14, value - 1))} title="Reducir letra"><Minus /></button><span>{fontSize}px</span><button onClick={() => setFontSize((value) => Math.min(34, value + 1))} title="Aumentar letra"><Plus /></button>
         </> : <>
@@ -101,7 +111,7 @@ export default function ReaderModal({ book, onClose }) {
           <span className="reader-fixed-font">El PDF conserva su tipografía</span>
         </>}
       </nav>
-      <main className={`reader-content ${isEpub ? 'epub-content' : 'pdf-content'}`} style={{ '--reader-background': colors.background, '--reader-color': colors.color }} onContextMenu={(event) => {
+      <main className={`reader-content ${isEpub ? `epub-content epub-${readingMode}` : 'pdf-content'}`} style={{ '--reader-background': colors.background, '--reader-color': colors.color }} onContextMenu={(event) => {
         const text = window.getSelection()?.toString()?.trim();
         if (text) { event.preventDefault(); setSelection(text); setMenuPoint({ x: event.clientX, y: event.clientY }); }
       }} onMouseUp={(event) => {
@@ -117,7 +127,7 @@ export default function ReaderModal({ book, onClose }) {
           <button onClick={translate}><Search size={15} /> Traducir en Google</button><button onClick={copy}>Copiar texto</button><button onClick={() => setMenuPoint(null)} aria-label="Cerrar opciones"><X size={14} /></button>
         </div>}
       </main>
-      <footer className="reader-foot"><Settings size={14} /> Mantén pulsada o selecciona una palabra para traducirla · El avance se guarda al cerrar.</footer>
+      <footer className="reader-foot"><Settings size={14} /> EPUB {readingMode === 'vertical' ? '· Desliza hacia arriba o abajo para leer' : '· Desliza hacia los lados para cambiar de página'} · Selecciona una palabra para traducirla.</footer>
     </section>
   </div>;
 }
